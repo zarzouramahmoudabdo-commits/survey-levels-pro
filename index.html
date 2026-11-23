@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مناسيب السقف</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--tx:#14202b;--mu:#5b6b7a;--pr:#0b6bcb;--bd:#d9e0e6}
+@media(prefers-color-scheme:dark){:root{--bg:#10161c;--card:#18212a;--tx:#e8eef3;--mu:#9fb0bf;--pr:#4da3ff;--bd:#2a3743}}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--bg);color:var(--tx);font-family:system-ui,Tahoma,sans-serif}
+h1{font-size:20px;margin:4px 0 12px}
+h2{font-size:16px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+.btn{display:inline-block;background:var(--pr);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:15px}
+input[type=file]{display:none}
+select{font-size:14px;padding:4px;border-radius:6px;background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+.mu{color:var(--mu);font-size:13px}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:center;white-space:nowrap}
+th{color:var(--mu);font-weight:600}
+.chip{display:inline-block;border:1px solid var(--bd);border-radius:16px;padding:3px 10px;margin:3px;font-size:14px;direction:ltr}
+.b{font-weight:700;direction:ltr}
+</style>
+</head>
+<body>
+<h1>📐 مناسيب السقف</h1>
+
+<div class="card">
+  <label class="btn" for="file">📄 اختر لوحة PDF</label>
+  <input type="file" id="file" accept="application/pdf">
+  <div id="st" class="mu" style="margin-top:8px"></div>
+  <div id="pgbox" style="display:none;margin-top:8px">الصفحة: <select id="pg"></select></div>
+</div>
+
+<div id="out" style="display:none">
+  <div class="card"><h2>المناسيب الموجودة على اللوحة (T.O.C)</h2><div id="lv"></div></div>
+  <div class="card"><h2>سمك البلاطات</h2><div class="wrap"><table id="sl"></table></div></div>
+  <div class="card">
+    <h2>الكمرات ومناسيبها</h2>
+    <div class="mu" style="margin-bottom:8px">العمق محسوب من وش البلاطة لتحت. غيّر المنسوب من القائمة لو الربط التلقائي غلط.</div>
+    <div class="wrap"><table id="bm"></table></div>
+  </div>
+  <button class="btn" id="cp">📋 نسخ النتائج</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const $=id=>document.getElementById(id);
+const fm=mm=>(mm<0?'-':'+')+(Math.abs(mm)/1000).toFixed(3);
+let pages=[],S=null;
+
+$('file').onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  $('st').textContent='جاري القراءة...';
+  try{
+    const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+    pages=[];
+    for(let i=1;i<=pdf.numPages;i++){
+      const tc=await (await pdf.getPage(i)).getTextContent();
+      const items=tc.items.filter(t=>t.str.trim()).map(t=>({s:t.str,x:t.transform[4],y:t.transform[5]}));
+      pages.push({items,score:items.filter(t=>/T\.?O\.?C/i.test(t.s)).length});
+    }
+    let best=0; pages.forEach((p,i)=>{if(p.score>pages[best].score)best=i});
+    $('pg').innerHTML=pages.map((p,i)=>`<option value="${i}">صفحة ${i+1} (${p.score} منسوب)</option>`).join('');
+    $('pg').value=best; $('pgbox').style.display='block';
+    analyze(best);
+  }catch(err){$('st').textContent='تعذر قراءة الملف: '+err.message}
+};
+$('pg').onchange=e=>analyze(+e.target.value);
+
+function analyze(i){
+  const items=pages[i].items;
+  const lines=[];
+  for(const it of [...items].sort((a,b)=>b.y-a.y)){
+    const l=lines.find(l=>Math.abs(l.y-it.y)<2.5);
+    if(l)l.its.push(it); else lines.push({y:it.y,its:[it]});
+  }
+  lines.forEach(l=>{l.its.sort((a,b)=>a.x-b.x);l.t=l.its.map(a=>a.s).join(' ')});
+
+  const size={},skip=new Set();
+  for(const l of lines){
+    const m=l.t.match(/([A-Z0-9]+-EB-\d+)\s+(\d{2,4})\s*[xX×]\s*(\d{2,4})/);
+    if(m){size[m[1]]={w:+m[2],d:+m[3]};l.its.forEach(a=>skip.add(a));}
+  }
+  const legend={};
+  for(const l of lines)for(const m of l.t.matchAll(/(\d{2,3})\s*mm\s*\+?(\d\.\d{3})\s*m/gi))legend[+m[1]]=Math.round(+m[2]*1000);
+
+  const toc=[];
+  for(const it of items){
+    let f=false;
+    for(const m of it.s.matchAll(/(\d{3,4})\s*T\.?O\.?C/gi)){if(+m[1]>=1000){toc.push({v:+m[1],x:it.x,y:it.y});f=true;}}
+    if(!f&&/^T\.?O\.?C\.?$/i.test(it.s.trim())){
+      const n=items.filter(a=>/^\d{4}$/.test(a.s.trim())&&Math.abs(a.y-it.y)<3)
+        .sort((a,b)=>Math.abs(a.x-it.x)-Math.abs(b.x-it.x))[0];
+      if(n)toc.push({v:+n.s.trim(),x:it.x,y:it.y});
+    }
+  }
+  const near=it=>toc.length?toc.reduce((b,c)=>Math.hypot(c.x-it.x,c.y-it.y)<Math.hypot(b.x-it.x,b.y-it.y)?c:b):null;
+  const cnt={}; toc.forEach(t=>cnt[t.v]=(cnt[t.v]||0)+1);
+  const levels=Object.entries(cnt).map(([v,n])=>[+v,n]).sort((a,b)=>b[0]-a[0]);
+
+  const sl={};
+  for(const it of items){
+    const m=it.s.match(/SLAB\s*THK\.?\s*(\d+)\s*MM/i);
+    if(m){const t=+m[1];const o=sl[t]=sl[t]||{n:0,lv:{}};o.n++;const c=near(it);if(c)o.lv[c.v]=(o.lv[c.v]||0)+1;}
+  }
+  const slabs=Object.entries(sl).map(([t,o])=>{
+    const lvl=legend[t]||(Object.entries(o.lv).sort((a,b)=>b[1]-a[1])[0]||[null])[0];
+    return {t:+t,n:o.n,top:lvl==null?null:+lvl};
+  }).sort((a,b)=>a.t-b.t);
+
+  const bm={};
+  for(const it of items){
+    if(skip.has(it))continue;
+    for(const m of it.s.matchAll(/[A-Z0-9]+-EB-\d+/g)){
+      const b=bm[m[0]]=bm[m[0]]||{n:0,lv:{}};
+      b.n++;const c=near(it);if(c)b.lv[c.v]=(b.lv[c.v]||0)+1;
+    }
+  }
+  Object.keys(size).forEach(k=>{bm[k]=bm[k]||{n:0,lv:{}}});
+  const beams=Object.keys(bm).sort().map(k=>{
+    const found=Object.entries(bm[k].lv).sort((a,b)=>b[1]-a[1]).map(e=>+e[0]);
+    return {tag:k,n:bm[k].n,found,sel:found.length?found[0]:null,w:size[k]?size[k].w:null,d:size[k]?size[k].d:null};
+  });
+  S={levels,slabs,beams};
+  render();
+}
+
+function render(){
+  $('out').style.display='block';
+  $('st').textContent=`تم: ${S.levels.length} منسوب، ${S.slabs.length} سمك بلاطة، ${S.beams.length} كمرة`;
+  $('lv').innerHTML=S.levels.map(([v,n])=>`<span class="chip">${fm(v)} <small>×${n}</small></span>`).join('')||'<span class="mu">مفيش مناسيب T.O.C في الصفحة دي</span>';
+  $('sl').innerHTML='<tr><th>السمك</th><th>منسوب الوش</th><th>منسوب القاع</th><th>العدد</th></tr>'+
+    S.slabs.map(s=>`<tr><td class="b">${s.t} مم</td><td class="b">${s.top==null?'—':fm(s.top)}</td><td class="b">${s.top==null?'—':fm(s.top-s.t)}</td><td>${s.n}</td></tr>`).join('');
+  const all=S.levels.map(l=>l[0]);
+  $('bm').innerHTML='<tr><th>الكمرة</th><th>المقاس</th><th>المنسوب</th><th>الوش</th><th>القاع</th></tr>'+
+    S.beams.map((b,i)=>{
+      const opts=[...b.found,...all.filter(v=>!b.found.includes(v))];
+      const sel=`<select data-i="${i}">${b.sel==null?'<option value="">—</option>':''}${opts.map(v=>`<option value="${v}"${v===b.sel?' selected':''}>${fm(v)}${b.found.includes(v)?' ★':''}</option>`).join('')}</select>`;
+      const bot=(b.sel!=null&&b.d)?fm(b.sel-b.d):'—';
+      return `<tr><td class="b">${b.tag.replace(/^.*-EB-/,'EB-')}</td><td class="b">${b.w?b.w+'×'+b.d:'غير موجود بالجدول'}</td><td>${sel}</td><td class="b">${b.sel!=null?fm(b.sel):'—'}</td><td class="b">${bot}</td></tr>`;
+    }).join('');
+}
+$('bm').onchange=e=>{
+  const i=e.target.dataset.i; if(i==null)return;
+  S.beams[i].sel=e.target.value===''?null:+e.target.value; render();
+};
+$('cp').onclick=()=>{
+  const t=['المناسيب: '+S.levels.map(l=>fm(l[0])).join(' | '),'',
+    ...S.slabs.map(s=>`بلاطة ${s.t}مم: وش ${s.top==null?'—':fm(s.top)} / قاع ${s.top==null?'—':fm(s.top-s.t)}`),'',
+    ...S.beams.map(b=>`${b.tag} ${b.w?b.w+'x'+b.d:''}: وش ${b.sel!=null?fm(b.sel):'—'} / قاع ${(b.sel!=null&&b.d)?fm(b.sel-b.d):'—'}`)].join('\n');
+  navigator.clipboard.writeText(t).then(()=>{$('cp').textContent='✅ تم النسخ'});
+};
+</script>
+</body>
+</html>
