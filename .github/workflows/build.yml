@@ -1,0 +1,31 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm install
+      - run: pip install pillow && python3 scripts/icon.py
+      - run: |
+          npx cap add android
+          npx -y @capacitor/assets generate --android --iconBackgroundColor '#0b6bcb' --iconBackgroundColorDark '#0b6bcb'
+          npx cap sync android
+          cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest -R ${{ github.repository }} -y --cleanup-tag || true
+          gh release create latest android/app/build/outputs/apk/debug/app-debug.apk -R ${{ github.repository }} --title "Survey Levels Pro" --notes "latest build"
