@@ -1,5 +1,5 @@
 (function(){
-const BUILD=5,R='https://raw.githubusercontent.com/zarzouramahmoudabdo-commits/survey-levels-pro/main/www/';
+const BUILD=7,R='https://raw.githubusercontent.com/zarzouramahmoudabdo-commits/survey-levels-pro/main/www/';
 const st=localStorage.getItem('app_html'),m=st&&st.match(/BUILD=(\d+)/);
 if(m&&+m[1]>BUILD&&!sessionStorage.w){sessionStorage.w=1;document.open();document.write(st);document.close();return;}
 const $=id=>document.getElementById(id);
@@ -109,5 +109,22 @@ $('ocr').onclick=async()=>{
     pages[idx]={items,score:items.filter(t=>/T\.?O\.?C/i.test(t.s)).length};
     analyze(idx);
   }catch(e){st.textContent='تعذر OCR: '+(e.message||e)}
+};
+const _an=analyze;
+analyze=function(i){
+  const P=pages[i];
+  P.items.forEach(t=>{t.s=t.s.replace(/T\.?O\.?C\.?\s*\(?\s*\+?(\d\.\d{2,3})\s*\)?/gi,(m,v)=>Math.round(v*1000)+' T.O.C')});
+  _an(i);
+  if(!S||S.beams.length)return;
+  const toc=[],bs=[],n={},first={};
+  P.items.forEach(t=>{const m=t.s.match(/^(\d{3,4}) T\.O\.C$/);if(m)toc.push({v:+m[1],x:t.x,y:t.y})});
+  P.items.forEach(t=>{
+    const m=t.s.match(/^\s*(?:\d+\s+)?(B\w*)\s*\(\s*(\d{2,4})\s*[xX×]\s*(\d{2,4})\s*\)/);
+    if(!m)return;
+    const z=m[2]+'x'+m[3],ty=m[1];first[ty]=first[ty]||z;n[ty]=(n[ty]||0)+1;
+    const c=toc.length?toc.reduce((b,c)=>Math.hypot(c.x-t.x,c.y-t.y)<Math.hypot(b.x-t.x,b.y-t.y)?c:b):null;
+    bs.push({mark:ty+'#'+n[ty],tag:ty+(first[ty]===z?'':"'"),found:c?[c.v]:[],sel:c?c.v:null,w:+m[2],d:+m[3]});
+  });
+  if(bs.length){S.beams=bs;render();}
 };
 })();
