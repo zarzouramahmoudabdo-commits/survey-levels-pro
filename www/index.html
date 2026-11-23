@@ -14,7 +14,8 @@ h2{font-size:16px;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
 .btn{display:inline-block;background:var(--pr);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:15px}
 input[type=file]{display:none}
-select{font-size:14px;padding:4px;border-radius:6px;background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+select,#q{font-size:14px;padding:6px;border-radius:6px;background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+#q{width:100%;margin-bottom:8px}
 .mu{color:var(--mu);font-size:13px}
 .wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:14px}
@@ -26,30 +27,30 @@ th{color:var(--mu);font-weight:600}
 </head>
 <body>
 <h1>📐 مناسيب السقف</h1>
-
 <div class="card">
   <label class="btn" for="file">📄 اختر لوحة PDF</label>
   <input type="file" id="file" accept="application/pdf">
   <div id="st" class="mu" style="margin-top:8px"></div>
   <div id="pgbox" style="display:none;margin-top:8px">الصفحة: <select id="pg"></select></div>
 </div>
-
 <div id="out" style="display:none">
-  <div class="card"><h2>المناسيب الموجودة على اللوحة (T.O.C)</h2><div id="lv"></div></div>
+  <div class="card"><h2>المناسيب على اللوحة (T.O.C)</h2><div id="lv"></div></div>
   <div class="card"><h2>سمك البلاطات</h2><div class="wrap"><table id="sl"></table></div></div>
+  <div class="card"><h2>⭐ الأنواع (المختصر)</h2><div class="wrap"><table id="ty"></table></div></div>
   <div class="card">
-    <h2>الكمرات ومناسيبها</h2>
-    <div class="mu" style="margin-bottom:8px">العمق محسوب من وش البلاطة لتحت. غيّر المنسوب من القائمة لو الربط التلقائي غلط.</div>
+    <h2>كل الكمرات</h2>
+    <input id="q" placeholder="🔍 ابحث برقم الكمرة" inputmode="numeric">
+    <div class="mu" style="margin-bottom:8px">العمق من وش البلاطة لتحت. ★ = أقرب منسوب للكمرة، غيّره لو غلط.</div>
     <div class="wrap"><table id="bm"></table></div>
   </div>
   <button class="btn" id="cp">📋 نسخ النتائج</button>
 </div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=id=>document.getElementById(id);
 const fm=mm=>(mm<0?'-':'+')+(Math.abs(mm)/1000).toFixed(3);
+const sh=t=>t.replace(/^.*-EB-/,'EB-');
 let pages=[],S=null;
 
 $('file').onchange=async e=>{
@@ -60,7 +61,7 @@ $('file').onchange=async e=>{
     pages=[];
     for(let i=1;i<=pdf.numPages;i++){
       const tc=await (await pdf.getPage(i)).getTextContent();
-      const items=tc.items.filter(t=>t.str.trim()).map(t=>({s:t.str,x:t.transform[4],y:t.transform[5]}));
+      const items=tc.items.filter(t=>t.str.trim()).map(t=>({s:t.str,x:t.transform[4],y:t.transform[5],a:Math.atan2(t.transform[1],t.transform[0])}));
       pages.push({items,score:items.filter(t=>/T\.?O\.?C/i.test(t.s)).length});
     }
     let best=0; pages.forEach((p,i)=>{if(p.score>pages[best].score)best=i});
@@ -70,6 +71,7 @@ $('file').onchange=async e=>{
   }catch(err){$('st').textContent='تعذر قراءة الملف: '+err.message}
 };
 $('pg').onchange=e=>analyze(+e.target.value);
+$('q').oninput=()=>render();
 
 function analyze(i){
   const items=pages[i].items;
@@ -112,18 +114,30 @@ function analyze(i){
     return {t:+t,n:o.n,top:lvl==null?null:+lvl};
   }).sort((a,b)=>a.t-b.t);
 
-  const bm={};
+  // الكمرات: الكود اللي فوق = رقم الكمرة، اللي تحت = نوعها
+  const tg=[];
   for(const it of items){
     if(skip.has(it))continue;
-    for(const m of it.s.matchAll(/[A-Z0-9]+-EB-\d+/g)){
-      const b=bm[m[0]]=bm[m[0]]||{n:0,lv:{}};
-      b.n++;const c=near(it);if(c)b.lv[c.v]=(b.lv[c.v]||0)+1;
+    for(const m of it.s.matchAll(/[A-Z0-9]+-EB-\d+/g))tg.push({tag:m[0],it});
+  }
+  const bm={};
+  for(const t of tg){
+    const c=Math.cos(t.it.a),s=Math.sin(t.it.a);
+    for(const p of tg){
+      if(p===t)continue;
+      const dx=p.it.x-t.it.x,dy=p.it.y-t.it.y;
+      const al=-dx*s+dy*c,ac=dx*c+dy*s;
+      if(Math.abs(ac)<10&&al>5&&al<30){
+        const b=bm[p.tag]=bm[p.tag]||{type:t.tag,lv:{}};
+        const n=near(t.it);if(n)b.lv[n.v]=(b.lv[n.v]||0)+1;
+        break;
+      }
     }
   }
-  Object.keys(size).forEach(k=>{bm[k]=bm[k]||{n:0,lv:{}}});
   const beams=Object.keys(bm).sort().map(k=>{
-    const found=Object.entries(bm[k].lv).sort((a,b)=>b[1]-a[1]).map(e=>+e[0]);
-    return {tag:k,n:bm[k].n,found,sel:found.length?found[0]:null,w:size[k]?size[k].w:null,d:size[k]?size[k].d:null};
+    const b=bm[k],z=size[b.type]||{};
+    const found=Object.entries(b.lv).sort((a,b)=>b[1]-a[1]).map(e=>+e[0]);
+    return {mark:k,tag:b.type,found,sel:found.length?found[0]:null,w:z.w||null,d:z.d||null};
   });
   S={levels,slabs,beams};
   render();
@@ -133,15 +147,27 @@ function render(){
   $('out').style.display='block';
   $('st').textContent=`تم: ${S.levels.length} منسوب، ${S.slabs.length} سمك بلاطة، ${S.beams.length} كمرة`;
   $('lv').innerHTML=S.levels.map(([v,n])=>`<span class="chip">${fm(v)} <small>×${n}</small></span>`).join('')||'<span class="mu">مفيش مناسيب T.O.C في الصفحة دي</span>';
-  $('sl').innerHTML='<tr><th>السمك</th><th>منسوب الوش</th><th>منسوب القاع</th><th>العدد</th></tr>'+
+  $('sl').innerHTML='<tr><th>السمك</th><th>الوش</th><th>القاع</th><th>العدد</th></tr>'+
     S.slabs.map(s=>`<tr><td class="b">${s.t} مم</td><td class="b">${s.top==null?'—':fm(s.top)}</td><td class="b">${s.top==null?'—':fm(s.top-s.t)}</td><td>${s.n}</td></tr>`).join('');
-  const all=S.levels.map(l=>l[0]);
-  $('bm').innerHTML='<tr><th>الكمرة</th><th>المقاس</th><th>المنسوب</th><th>الوش</th><th>القاع</th></tr>'+
+
+  const g={};
+  S.beams.forEach(b=>{
+    if(b.sel==null||!b.d)return;
+    const k=b.tag+'|'+b.sel;
+    (g[k]=g[k]||{tag:b.tag,w:b.w,d:b.d,sel:b.sel,m:[]}).m.push(b.mark.replace(/^.*-EB-/,''));
+  });
+  S.secs=Object.values(g).sort((a,b)=>a.tag<b.tag?-1:a.tag>b.tag?1:b.sel-a.sel);
+  $('ty').innerHTML='<tr><th>النوع</th><th>المقاس</th><th>الوش</th><th>القاع</th><th>الكمرات</th></tr>'+
+    S.secs.map(s=>`<tr><td class="b">${sh(s.tag)}</td><td class="b">${s.w}×${s.d}</td><td class="b">${fm(s.sel)}</td><td class="b">${fm(s.sel-s.d)}</td><td style="white-space:normal;direction:ltr">${s.m.join(' ')}</td></tr>`).join('');
+
+  const q=$('q').value.trim(),all=S.levels.map(l=>l[0]);
+  $('bm').innerHTML='<tr><th>الكمرة</th><th>النوع</th><th>المقاس</th><th>المنسوب</th><th>القاع</th></tr>'+
     S.beams.map((b,i)=>{
+      if(q&&!b.mark.endsWith(q)&&!b.mark.includes('-'+q))return '';
       const opts=[...b.found,...all.filter(v=>!b.found.includes(v))];
       const sel=`<select data-i="${i}">${b.sel==null?'<option value="">—</option>':''}${opts.map(v=>`<option value="${v}"${v===b.sel?' selected':''}>${fm(v)}${b.found.includes(v)?' ★':''}</option>`).join('')}</select>`;
       const bot=(b.sel!=null&&b.d)?fm(b.sel-b.d):'—';
-      return `<tr><td class="b">${b.tag.replace(/^.*-EB-/,'EB-')}</td><td class="b">${b.w?b.w+'×'+b.d:'غير موجود بالجدول'}</td><td>${sel}</td><td class="b">${b.sel!=null?fm(b.sel):'—'}</td><td class="b">${bot}</td></tr>`;
+      return `<tr><td class="b">${sh(b.mark)}</td><td class="b">${sh(b.tag)}</td><td class="b">${b.w?b.w+'×'+b.d:'—'}</td><td>${sel}</td><td class="b">${bot}</td></tr>`;
     }).join('');
 }
 $('bm').onchange=e=>{
@@ -151,9 +177,10 @@ $('bm').onchange=e=>{
 $('cp').onclick=()=>{
   const t=['المناسيب: '+S.levels.map(l=>fm(l[0])).join(' | '),'',
     ...S.slabs.map(s=>`بلاطة ${s.t}مم: وش ${s.top==null?'—':fm(s.top)} / قاع ${s.top==null?'—':fm(s.top-s.t)}`),'',
-    ...S.beams.map(b=>`${b.tag} ${b.w?b.w+'x'+b.d:''}: وش ${b.sel!=null?fm(b.sel):'—'} / قاع ${(b.sel!=null&&b.d)?fm(b.sel-b.d):'—'}`)].join('\n');
+    ...S.secs.map(s=>`${sh(s.tag)} ${s.w}x${s.d}: وش ${fm(s.sel)} / قاع ${fm(s.sel-s.d)} (كمرات ${s.m.join(' ')})`)].join('\n');
   navigator.clipboard.writeText(t).then(()=>{$('cp').textContent='✅ تم النسخ'});
 };
 </script>
-<script src="extra.js"></script></body>
+<script src="extra.js"></script>
+</body>
 </html>

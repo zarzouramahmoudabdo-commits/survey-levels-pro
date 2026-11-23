@@ -1,5 +1,5 @@
 (function(){
-const BUILD=1,R='https://raw.githubusercontent.com/zarzouramahmoudabdo-commits/survey-levels-pro/main/www/';
+const BUILD=2,R='https://raw.githubusercontent.com/zarzouramahmoudabdo-commits/survey-levels-pro/main/www/';
 const st=localStorage.getItem('app_html'),m=st&&st.match(/BUILD=(\d+)/);
 if(m&&+m[1]>BUILD&&!sessionStorage.w){sessionStorage.w=1;document.open();document.write(st);document.close();return;}
 const $=id=>document.getElementById(id);
@@ -28,7 +28,7 @@ function sec(b){
   return `<svg viewBox="0 0 ${w+110} ${h+40}" width="320" style="direction:ltr"><g fill="rgba(11,107,203,.3)" stroke="currentColor"><rect x="${x}" y="${y}" width="${w}" height="${t*k}"/><rect x="${c-bw/2}" y="${y}" width="${bw}" height="${h}"/></g><g font-size="11" fill="currentColor" stroke="currentColor" stroke-dasharray="3">${L.map(([d,v])=>`<line x1="${x}" x2="${x+w+6}" y1="${y+d*k}" y2="${y+d*k}" stroke-width=".5"/><text x="${x+w+8}" y="${y+d*k+4}" stroke="none">${fm(v)}</text>`).join('')}</g><text x="${c}" y="${y+h+14}" font-size="11" text-anchor="middle" fill="currentColor">${b.w}</text></svg>`;
 }
 function draw(){
-  const bs=S.beams.filter(b=>b.sel!=null&&b.d);
+  const bs=(S.secs||S.beams).filter(b=>b.sel!=null&&b.d);
   $('secs').style.display=bs.length?'block':'none';
   $('sg').innerHTML=bs.map(b=>`<div style="display:inline-block;margin:4px;text-align:center"><b>${b.tag.replace(/^.*-EB-/,'EB-')} (${b.w}×${b.d})</b><br>${sec(b)}</div>`).join('');
 }
