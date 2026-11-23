@@ -1,5 +1,5 @@
 (function(){
-const BUILD=2,R='https://raw.githubusercontent.com/zarzouramahmoudabdo-commits/survey-levels-pro/main/www/';
+const BUILD=3,R='https://raw.githubusercontent.com/zarzouramahmoudabdo-commits/survey-levels-pro/main/www/';
 const st=localStorage.getItem('app_html'),m=st&&st.match(/BUILD=(\d+)/);
 if(m&&+m[1]>BUILD&&!sessionStorage.w){sessionStorage.w=1;document.open();document.write(st);document.close();return;}
 const $=id=>document.getElementById(id);
@@ -42,4 +42,27 @@ $('up').onclick=async()=>{
     location.reload();
   }catch(e){b.textContent='🔄';alert('تعذر التحديث، تأكد من الإنترنت');}
 };
+const cv=document.createElement('div');cv.className='card';
+cv.innerHTML=`<h2>🔁 تحويل معماري ← مساحي</h2>
+<div class="row"><span>منسوب ±0.00 المعماري (مساحي)</span><input id="z0" type="number" step="any" inputmode="decimal"></div>
+<div class="row"><span>سمك التشطيبات (مم)</span><input id="fin" type="number" inputmode="decimal"></div>
+<div class="row"><span>منسوب معماري (م)</span><input id="ar" type="number" step="any" inputmode="decimal"></div>
+<div>مساحي (وش التشطيب): <b id="cv1">—</b></div>
+<div>مساحي (وش الخرسانة): <b id="cv2">—</b></div>
+<div class="wrap" id="cvl" style="margin-top:8px"></div>`;
+document.body.appendChild(cv);
+try{$('z0').value=localStorage.z0||'';$('fin').value=localStorage.fin||'';}catch(e){}
+function conv(){
+  const z=parseFloat($('z0').value),fn=(parseFloat($('fin').value)||0)/1000,a=parseFloat($('ar').value);
+  try{localStorage.z0=$('z0').value;localStorage.fin=$('fin').value;}catch(e){}
+  $('cv1').textContent=f(z+a);$('cv2').textContent=f(z+a-fn);
+  const L=$('cvl');
+  if(!isFinite(z)||typeof S==='undefined'||!S){L.innerHTML='';return;}
+  const t=v=>(z+v/1000).toFixed(3);
+  L.innerHTML='<table><tr><th>العنصر</th><th>على اللوحة</th><th>مساحي</th></tr>'+
+    S.levels.map(([v])=>`<tr><td>T.O.C</td><td class="b">${fm(v)}</td><td class="b">${t(v)}</td></tr>`).join('')+
+    (S.secs||[]).map(s=>`<tr><td class="b">${sh(s.tag)} ${s.w}×${s.d}</td><td class="b">${fm(s.sel)} / ${fm(s.sel-s.d)}</td><td class="b">${t(s.sel)} / ${t(s.sel-s.d)}</td></tr>`).join('')+'</table>';
+}
+cv.oninput=conv;
+const _r2=render;render=function(){_r2();conv();};
 })();
