@@ -1,5 +1,5 @@
 (function(){
-const BUILD=7,R='https://raw.githubusercontent.com/zarzouramahmoudabdo-commits/survey-levels-pro/main/www/';
+const BUILD=11,R='https://raw.githubusercontent.com/zarzouramahmoudabdo-commits/survey-levels-pro/main/www/';
 const st=localStorage.getItem('app_html'),m=st&&st.match(/BUILD=(\d+)/);
 if(m&&+m[1]>BUILD&&!sessionStorage.w){sessionStorage.w=1;document.open();document.write(st);document.close();return;}
 const $=id=>document.getElementById(id);
@@ -126,5 +126,50 @@ analyze=function(i){
     bs.push({mark:ty+'#'+n[ty],tag:ty+(first[ty]===z?'':"'"),found:c?[c.v]:[],sel:c?c.v:null,w:+m[2],d:+m[3]});
   });
   if(bs.length){S.beams=bs;render();}
+};
+nm=function(s){
+  return s.replace(/\n/g,' ')
+   .replace(/(?<![A-Za-z])T\s*[.,:]?\s*[0O]\s*[.,:]?\s*[CG]\b\.?/gi,'T.O.C')
+   .replace(/T\.O\.C\s*\+?\s*(\d{4})/g,'$1 T.O.C')
+   .replace(/(?:SLAB|FLOOR)\s*THK\.?\s*(\d{2,3})\s*MM/gi,'SLAB THK.$1MM')
+   .replace(/(?:SLAB|FLOOR)\s*(\d{3})\s*THK\.?/gi,'SLAB THK.$1MM')
+   .replace(/\b(\d{3})\s*MM\s*\+?\s*(\d{4})\b/gi,(m,t,l)=>t+' mm +'+(l/1000).toFixed(3)+'m')
+   .replace(/\b([A-Z]\d{2})\s*[-:._]?\s*[E£]\s*B\s*[-:._]?\s*(\d{3})/g,'$1-EB-$2').trim();
+};
+$('ocr').onclick=async()=>{
+  const st=$('st');
+  if(!window._f){alert('اختر ملف PDF الأول');return;}
+  try{
+    st.textContent='تحميل محرك OCR...';
+    if(!window.Tesseract)await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)});
+    const w=await Tesseract.createWorker('eng');
+    await w.setParameters({tessedit_pageseg_mode:'11'});
+    const idx=+$('pg').value||0;
+    const pdf=await pdfjsLib.getDocument({data:await window._f.arrayBuffer()}).promise;
+    const pg=await pdf.getPage(idx+1);
+    const v0=pg.getViewport({scale:1}),land=v0.width>v0.height;
+    const K=Math.min(6,6000/Math.max(v0.width,v0.height));
+    const vp=pg.getViewport({scale:K,rotation:(pg.rotate+(land?0:+$('rot').value))%360});
+    const W=Math.ceil(vp.width),H=Math.ceil(vp.height),T=2000,O=150;
+    const cv=document.createElement('canvas'),items=[],nx=Math.ceil(W/T),ny=Math.ceil(H/T);let n=0;
+    for(let r=0;r<ny;r++)for(let c=0;c<nx;c++){
+      n++;st.textContent=`OCR جزء ${n}/${nx*ny} ...`;
+      const tx=Math.max(0,c*T-O),ty=Math.max(0,r*T-O);
+      cv.width=Math.min(W-tx,T+2*O);cv.height=Math.min(H-ty,T+2*O);
+      const g=cv.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,cv.width,cv.height);
+      await pg.render({canvasContext:g,viewport:vp,transform:[1,0,0,1,-tx,-ty]}).promise;
+      const {data}=await w.recognize(cv);
+      for(const l of data.lines){
+        const s=nm(l.text);if(s.length<2)continue;
+        const x=(tx+l.bbox.x0)/K,y=(H-(ty+l.bbox.y1))/K;
+        if(items.some(i=>i.s===s&&Math.abs(i.x-x)<3&&Math.abs(i.y-y)<3))continue;
+        items.push({s,x,y,a:0});
+      }
+    }
+    await w.terminate();
+    pages[idx]={items,score:items.filter(t=>/T\.?O\.?C/i.test(t.s)).length};
+    analyze(idx);
+    st.textContent='🔍 قراءة OCR — الأرقام تقريبية، راجعها على اللوحة. '+st.textContent;
+  }catch(e){st.textContent='تعذر OCR: '+(e.message||e)}
 };
 })();

@@ -35,7 +35,7 @@ th{color:var(--mu);font-weight:600}
 </div>
 <div id="out" style="display:none">
   <div class="card"><h2>المناسيب على اللوحة (T.O.C)</h2><div id="lv"></div></div>
-  <div class="card"><h2>سمك البلاطات</h2><div class="wrap"><table id="sl"></table></div></div>
+  <div class="card"><h2>سمك البلاطات</h2><div class="wrap"><table id="sl"></table></div><div class="mu">≈ = أقرب منسوب على اللوحة، مش من جدول الألوان. راجعه.</div></div>
   <div class="card"><h2>⭐ الأنواع (المختصر)</h2><div class="wrap"><table id="ty"></table></div></div>
   <div class="card">
     <h2>كل الكمرات</h2>
@@ -75,12 +75,14 @@ $('q').oninput=()=>render();
 
 function analyze(i){
   const items=pages[i].items;
+  // أسطر الجداول بحسب اتجاه النص (يدعم اللوحات المقلوبة)
   const lines=[];
-  for(const it of [...items].sort((a,b)=>b.y-a.y)){
-    const l=lines.find(l=>Math.abs(l.y-it.y)<2.5);
-    if(l)l.its.push(it); else lines.push({y:it.y,its:[it]});
+  for(const it of items){
+    const a=it.a||0,c=Math.cos(a),s=Math.sin(a),u=it.x*c+it.y*s,v=-it.x*s+it.y*c;
+    const l=lines.find(l=>Math.abs(l.a-a)<.2&&Math.abs(l.v-v)<2.5);
+    if(l)l.its.push({it,u}); else lines.push({a,v,its:[{it,u}]});
   }
-  lines.forEach(l=>{l.its.sort((a,b)=>a.x-b.x);l.t=l.its.map(a=>a.s).join(' ')});
+  lines.forEach(l=>{l.its.sort((p,q)=>p.u-q.u);l.t=l.its.map(p=>p.it.s).join(' ');l.its=l.its.map(p=>p.it)});
 
   const size={},skip=new Set();
   for(const l of lines){
@@ -106,12 +108,12 @@ function analyze(i){
 
   const sl={};
   for(const it of items){
-    const m=it.s.match(/SLAB\s*THK\.?\s*(\d+)\s*MM/i);
-    if(m){const t=+m[1];const o=sl[t]=sl[t]||{n:0,lv:{}};o.n++;const c=near(it);if(c)o.lv[c.v]=(o.lv[c.v]||0)+1;}
+    const m=it.s.match(/(?:SLAB|FLOOR)\s*THK\.?\s*(\d+)\s*MM|(?:SLAB|FLOOR)\s*(\d{3})\s*THK/i);
+    if(m){const t=+(m[1]||m[2]);const o=sl[t]=sl[t]||{n:0,lv:{}};o.n++;const c=near(it);if(c)o.lv[c.v]=(o.lv[c.v]||0)+1;}
   }
   const slabs=Object.entries(sl).map(([t,o])=>{
     const lvl=legend[t]||(Object.entries(o.lv).sort((a,b)=>b[1]-a[1])[0]||[null])[0];
-    return {t:+t,n:o.n,top:lvl==null?null:+lvl};
+    return {t:+t,n:o.n,top:lvl==null?null:+lvl,near:!legend[t]};
   }).sort((a,b)=>a.t-b.t);
 
   // الكمرات: الكود اللي فوق = رقم الكمرة، اللي تحت = نوعها
@@ -122,16 +124,17 @@ function analyze(i){
   }
   const bm={};
   for(const t of tg){
-    const c=Math.cos(t.it.a),s=Math.sin(t.it.a);
+    const c=Math.cos(t.it.a||0),s=Math.sin(t.it.a||0);
+    let best=null,ba=1e9;
     for(const p of tg){
       if(p===t)continue;
       const dx=p.it.x-t.it.x,dy=p.it.y-t.it.y;
       const al=-dx*s+dy*c,ac=dx*c+dy*s;
-      if(Math.abs(ac)<10&&al>5&&al<30){
-        const b=bm[p.tag]=bm[p.tag]||{type:t.tag,lv:{}};
-        const n=near(t.it);if(n)b.lv[n.v]=(b.lv[n.v]||0)+1;
-        break;
-      }
+      if(Math.abs(ac)<10&&al>1.5&&al<30&&al<ba){ba=al;best=p;}
+    }
+    if(best){
+      const b=bm[best.tag]=bm[best.tag]||{type:t.tag,lv:{}};
+      const n=near(t.it);if(n)b.lv[n.v]=(b.lv[n.v]||0)+1;
     }
   }
   const beams=Object.keys(bm).sort().map(k=>{
@@ -148,7 +151,7 @@ function render(){
   $('st').textContent=`تم: ${S.levels.length} منسوب، ${S.slabs.length} سمك بلاطة، ${S.beams.length} كمرة`;
   $('lv').innerHTML=S.levels.map(([v,n])=>`<span class="chip">${fm(v)} <small>×${n}</small></span>`).join('')||'<span class="mu">مفيش مناسيب T.O.C في الصفحة دي</span>';
   $('sl').innerHTML='<tr><th>السمك</th><th>الوش</th><th>القاع</th><th>العدد</th></tr>'+
-    S.slabs.map(s=>`<tr><td class="b">${s.t} مم</td><td class="b">${s.top==null?'—':fm(s.top)}</td><td class="b">${s.top==null?'—':fm(s.top-s.t)}</td><td>${s.n}</td></tr>`).join('');
+    S.slabs.map(s=>`<tr><td class="b">${s.t} مم</td><td class="b">${s.top==null?'—':(s.near?'≈ ':'')+fm(s.top)}</td><td class="b">${s.top==null?'—':(s.near?'≈ ':'')+fm(s.top-s.t)}</td><td>${s.n}</td></tr>`).join('');
 
   const g={};
   S.beams.forEach(b=>{
@@ -176,7 +179,7 @@ $('bm').onchange=e=>{
 };
 $('cp').onclick=()=>{
   const t=['المناسيب: '+S.levels.map(l=>fm(l[0])).join(' | '),'',
-    ...S.slabs.map(s=>`بلاطة ${s.t}مم: وش ${s.top==null?'—':fm(s.top)} / قاع ${s.top==null?'—':fm(s.top-s.t)}`),'',
+    ...S.slabs.map(s=>`بلاطة ${s.t}مم: وش ${s.top==null?'—':(s.near?'≈':'')+fm(s.top)} / قاع ${s.top==null?'—':(s.near?'≈':'')+fm(s.top-s.t)}`),'',
     ...S.secs.map(s=>`${sh(s.tag)} ${s.w}x${s.d}: وش ${fm(s.sel)} / قاع ${fm(s.sel-s.d)} (كمرات ${s.m.join(' ')})`)].join('\n');
   navigator.clipboard.writeText(t).then(()=>{$('cp').textContent='✅ تم النسخ'});
 };
